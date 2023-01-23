@@ -129,27 +129,29 @@ const purchaseFishnet = catchAsync(async (req, res) => {
     if (baskets.length === 1) index = 0;
     else if (index === baskets.length) index = index - 1;
 
-    let result = await BasketService.buy(baskets[index], fishnet, {
-      amount: amount,
-      gas: gas,
-      maxFeePerGas: maxFeePerGas,
-      maxPriorityFeePerGas: maxPriorityFeePerGas,
-    });
+    if (baskets[index]) {
+      let result = await BasketService.buy(baskets[index], fishnet, {
+        amount: amount,
+        gas: gas,
+        maxFeePerGas: maxFeePerGas,
+        maxPriorityFeePerGas: maxPriorityFeePerGas,
+      });
 
-    fishnet.intTxns.push({
-      basket: baskets[index].id,
-      amount: amount,
-      buyTxnHash: result.transactionHash,
-      fee: 0,
-      createdAt: new Date(),
-      status: result.status ? 1 : 3,
-    });
-    await fishnet.save();
-    
-    fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
+      fishnet.intTxns.push({
+        basket: baskets[index].id,
+        amount: amount,
+        buyTxnHash: result.transactionHash,
+        fee: 0,
+        createdAt: new Date(),
+        status: result.status ? 1 : 3,
+      });
+      await fishnet.save();
+      
+      fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
 
-    delay = Math.round(Math.random() * (req.body.maxInterval - req.body.minInterval) + req.body.minInterval);
-    await sleep(delay);
+      delay = Math.round(Math.random() * (req.body.maxInterval - req.body.minInterval) + req.body.minInterval);
+      await sleep(delay);
+    }
   }
   res.status(httpStatus.NO_CONTENT).send();
 });
