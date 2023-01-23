@@ -146,7 +146,7 @@ const sell = async (fishnet, txn, info) => {
       maxFeePerGas: Web3.utils.toWei(info.maxFeePerGas.toString(), 'gwei'),
       maxPriorityFeePerGas: Web3.utils.toWei(info.maxPriorityFeePerGas.toString(), 'gwei'),
     };
-    const signedTx1 = await provider.eth.accounts.signTransaction(genTx(tx, ocean), wallet.privateKey);
+    const signedTx1 = await provider.eth.accounts.signTransaction(genTx(tx1, ocean), wallet.privateKey);
     const recept1 = await provider.eth.sendSignedTransaction(signedTx1.rawTransaction);
 
     let nonce = await provider.eth.getTransactionCount(basket.address, 'latest');
