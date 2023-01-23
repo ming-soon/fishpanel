@@ -102,7 +102,7 @@ const calcFishnet = catchAsync(async (req, res) => {
 
 
 const purchaseFishnet = catchAsync(async (req, res) => {
-  const fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
+  var fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
   if (!fishnet || fishnet.user != req.user.id) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Fishnet not found');
   }
@@ -145,6 +145,8 @@ const purchaseFishnet = catchAsync(async (req, res) => {
       status: result.status ? 1 : 3,
     });
     await fishnet.save();
+    
+    fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
 
     delay = Math.round(Math.random() * (req.body.maxInterval - req.body.minInterval) + req.body.minInterval);
     await sleep(delay);
