@@ -78,7 +78,7 @@ const buy = async (basket, fishnet, info) => {
     const mnemonic = RsaService.decrypt(basket.keyPhrase, 0);
     const wallet   = ethers.Wallet.fromMnemonic(mnemonic);
     const contract = new provider.eth.Contract(JSON.parse(ocean.routerAbi), ocean.routerAddr);
-    const encodedAbi = await contract.methods.swapExactETHForTokensSupportingFeeOnTransferTokens(0, [ocean.etherAddress, fishnet.baitAddr], basket.address, Math.round(new Date().getTime() / 1000 + 2000)).encodeABI();
+    const encodedAbi = await contract.methods.swapExactETHForTokens(0, [ocean.etherAddress, fishnet.baitAddr], basket.address, Math.round(new Date().getTime() / 1000 + 2000)).encodeABI();
     const tx = {
       from: basket.address,
       to: fishnet.ocean.routerAddr,
@@ -151,7 +151,7 @@ const sell = async (fishnet, txn, info) => {
 
     let nonce = await provider.eth.getTransactionCount(basket.address, 'latest');
     const contract = new provider.eth.Contract(JSON.parse(ocean.routerAbi), ocean.routerAddr);
-    const encodedAbi = await contract.methods.swapExactTokensForETHSupportingFeeOnTransferTokens(balance, 0, [fishnet.baitAddr, ocean.etherAddress], basket.address, Math.round(new Date().getTime() / 1000 + 2000)).encodeABI();
+    const encodedAbi = await contract.methods.swapExactTokensForETH(balance, 0, [fishnet.baitAddr, ocean.etherAddress], basket.address, Math.round(new Date().getTime() / 1000 + 2000)).encodeABI();
     const tx = {
       from: basket.address,
       to: fishnet.ocean.routerAddr,
