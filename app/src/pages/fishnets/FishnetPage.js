@@ -38,7 +38,7 @@ export default function FishnetsPage() {
     setLoading(true);
     try {
       const response = await axios.get('/fishnets');
-      setList(response);
+      setList(response.sort((a, b) => b.id.localeCompare(a.id)));
       setError(null);
 
       if (currentItem !== null) {

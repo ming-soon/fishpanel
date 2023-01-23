@@ -123,7 +123,7 @@ const purchaseFishnet = catchAsync(async (req, res) => {
       },
       status: 1,
     });
-    baskets = baskets.filter(b => fishnet.intTxns.findIndex(v => v.basket.address.toLowerCase() === b.address.toLowerCase()) === -1);
+    // baskets = baskets.filter(b => fishnet.intTxns.findIndex(v => v.basket.address.toLowerCase() === b.address.toLowerCase()) === -1);
 
     let index = Math.round(Math.random() * baskets.length);
     if (baskets.length === 1) index = 0;
