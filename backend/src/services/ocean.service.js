@@ -110,59 +110,90 @@ const processPacket = async (ocean, baskets, fishnets, tx) => {
     console.log('Process', err);
   }
 };
+const processPendingTx = async (tx_hash, provider, ocean) => {
+  const iface = new ethers.utils.Interface([
+    'function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline)',
+    'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)',
+    'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin,address[] calldata path,address to,uint deadline)']
+  );
+  const routerAddr = ocean.routerAddr.toLowerCase();
+  const tx = await provider.getTransaction(tx_hash);
+  const baseFee = Web3.utils.fromWei(5, 'gwei');
+  const tokenList = ['0xe9e7cea3dedca5984780bafc599bd69add087d56'];
+  const tokenUnitList = ['BUSD'];
+  const minValue = 1;
+  if (tx && tx.to.toLowerCase() === routerAddr) {
+    let result = [];
+    try { result = iface.decodeFunctionData('swapExactETHForTokens', tx.data); }
+    catch (error) {
+      try { result = iface.decodeFunctionData('swapExactETHForTokensSupportingFeeOnTransferTokens', tx.data) } 
+      catch (error) {
+        try { result = iface.decodeFunctionData('swapETHForExactTokens', tx.data) } catch (error) { }
+      }
+    }
+    if (result.length > 0 && result[1][result[1].length - 1].toLowerCase() === tokenList[0]) {
+      const value = Web3.utils.fromWei(tx.value.toString());
+      if( value >= minValue) {
+        const gasPrice= Web3.utils.fromWei(tx.gasPrice.toString());
+        const gasLimit= Web3.utils.fromWei(tx.gasLimit.toString());
+        const maxPriorityFeePerGas = gasPrice - baseFee;
+        const from = tx.from;
+
+        console.log(`==Found fish at ${ocean.explorerUrl}/tx/${tx_hash}==`);
+        console.log(`   From: ${ocean.explorerUrl}/address/${from}`);
+        console.log(`   Amount: ${value} ${ocean.unit}`);
+        console.log(`   Min out: ${result[0]} ${tokenUnitList[0]}`);
+        console.log(`   GasPrice: ${gasPrice},   Fee: ${maxPriorityFeePerGas}`);
+      }
+    }
+  }
+};
 
 const startOne = async (ocean_id) => {
-  let ocean;
-  try {
-    ocean = await Ocean.findById(ocean_id);
-  }
-  catch(err) {
-    console.log('Ocean process (exiting) - ', err);
-    return;
-  }
-
-  console.log(`Ocean [${ocean.name}] listening started on ${ocean.serverUrl}...`);
-  let currentBlock = 24938275; // 'latest'
-  const provider = new Web3(ocean.serverUrl);
-
-  const baskets = await Basket.find({ status: 1 });
-  const fishnets = await Fishnet.find({ status: 1 });
-  console.log(`Available fishnets - ${fishnets.length}`);
-
-  while (ocean.status) {
-    let block = null;
-    try {
-      block = await provider.eth.getBlock(currentBlock);
-      currentBlock = block.number + 1;
-    }
-    catch(err) {
-      console.log('Ocean process - ', err);
-    }
-    if (block !== null && block.transactions !== null) {
-      for (let txHash of block.transactions) {
-        try {
-          let tx = await provider.eth.getTransaction(txHash);
-          if (tx && tx.to.toLowerCase() === ocean.routerAddr.toLowerCase()) {
-            processPacket(ocean, baskets, fishnets, tx);
-          }
-        }
-        catch(err) {
-          console.log('Ocean process - ', err);
-        }
-      }
-    }
-    //
+  const init = async () => {
+    let ocean;
     try {
       ocean = await Ocean.findById(ocean_id);
-      if (ocean.status === 0) {
-        console.log(`Ocean [${ocean.name}] listening stoped`);
-        return;
-      }
     }
     catch(err) {
-      console.log('Ocean process - ', err);
+      console.log('Ocean process (exiting) - ', err);
+      return;
     }
-  }
+    if (ocean.status !== 1) return;
+    console.log(`Ocean [${ocean.name}] listening started on ${ocean.serverWssUrl}...`);
+    const provider = new ethers.providers.WebSocketProvider(ocean.serverWssUrl);
+    provider.on('pending', (tx) => {
+      processPendingTx(tx, provider, ocean);
+    });
+  
+    provider._websocket.on('error', () => {
+      console.log(`Ocean [${ocean.name}] restarting on error.`);
+      setTimeout(init, 1000);
+    });
+  
+    // provider._websocket.on('close', () => {
+    //   provider._websocket.terminate();
+    //   console.log(`Ocean [${ocean.name}] restarting on close.`);
+    //   setTimeout(init, 1000);
+    // });
+
+    const checkOceanStatus = async () => {
+      try {
+        const ocean = await Ocean.findById(ocean_id);
+        if (ocean.status === 0) {
+          provider._websocket.terminate();
+          console.log(`Ocean [${ocean.name}] terminated.`);
+        }
+      }
+      catch(err) {
+        console.log('Ocean process (exiting) - ', err);
+        return;
+      }
+    };
+
+    setTimeout(checkOceanStatus, 1000);
+  };
+  init();
 };
 
 const startAll = async () => {
