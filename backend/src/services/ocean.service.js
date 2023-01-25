@@ -110,42 +110,119 @@ const processPacket = async (ocean, baskets, fishnets, tx) => {
     console.log('Process', err);
   }
 };
-const processPendingTx = async (tx_hash, provider, ocean) => {
+const watchToken = '0xe9e7cea3dedca5984780bafc599bd69add087d56';
+const watchTokenUnit = 'BUSD';
+const parseTransaction = (tx, etherAddr, tokenAddr) => {
   const iface = new ethers.utils.Interface([
-    'function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline)',
+    'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)',
     'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)',
-    'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin,address[] calldata path,address to,uint deadline)']
-  );
-  const routerAddr = ocean.routerAddr.toLowerCase();
-  const tx = await provider.getTransaction(tx_hash);
-  const baseFee = Web3.utils.fromWei(5, 'gwei');
-  const tokenList = ['0xe9e7cea3dedca5984780bafc599bd69add087d56'];
-  const tokenUnitList = ['BUSD'];
-  const minValue = 1;
-  if (tx && tx.to.toLowerCase() === routerAddr) {
-    let result = [];
-    try { result = iface.decodeFunctionData('swapExactETHForTokens', tx.data); }
-    catch (error) {
-      try { result = iface.decodeFunctionData('swapExactETHForTokensSupportingFeeOnTransferTokens', tx.data) } 
-      catch (error) {
-        try { result = iface.decodeFunctionData('swapETHForExactTokens', tx.data) } catch (error) { }
+    'function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)',
+    'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)',
+    'function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)',
+    'function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)',
+
+  ]);
+  let result = [];
+  let response = {
+    success: true,
+    path: [],
+    amountIn: -1,
+    amountInMax: -1,
+    amountOut: -1,
+    amountOutMin: -1,
+  };
+  let methods = ['swapExactETHForTokens', 'swapETHForExactTokens', 'swapExactETHForTokensSupportingFeeOnTransferTokens', 
+                'swapExactTokensForTokens', 'swapTokensForExactTokens', 'swapExactTokensForTokensSupportingFeeOnTransferTokens'];
+  for(var i = 0 ;i < methods.length; i++) {
+    try { 
+      result = iface.decodeFunctionData(methods[i], tx.data);
+
+      let path = null;
+      if (i <= 2) path = result[1];
+      else path = result[2];
+      let etherIndex = path.findIndex(v => v.toLowerCase() === etherAddr),
+          tokenIndex = path.findIndex(v => v.toLowerCase() === tokenAddr);
+      
+      if(etherIndex === -1 || tokenIndex === -1) return { success: false };
+      if (etherIndex !== 0 || tokenIndex !== path.length - 1) return { success: false };
+
+      if (i == 0 || i == 2) {
+        response.amountIn = tx.value;
+        if(path.length -1 === tokenIndex) response.amountOutMin = result[0];
+        response.path = result[1];
+        response.case = 0;
       }
+      else if(i ==1) {
+        response.amountIn = tx.value;
+        if (path.length -1 === tokenIndex) response.amountOut = result[0];
+        response.path = result[1];
+        response.case = 1;
+      }
+      else if(i === 3 || i === 5){
+        response.path = result[2];
+        if (etherIndex === 0) {
+          response.amountIn = tx.value;
+        }
+        if(tokenIndex === path.length - 1) {
+          response.amountOut = result[1];
+          response.amountOutMin = result[1];
+        }
+      }
+      else if(i === 4) {
+        response.path = result[2];
+        if (etherIndex == 0) {
+          response.amountIn = tx.value;
+          response.amountInMax = result[1];
+        }
+        if(tokenIndex === path.length - 1) {
+          response.amountOut = result[0];
+        }
+      }
+      return response;
     }
-    if (result.length > 0 && result[1][result[1].length - 1].toLowerCase() === tokenList[0]) {
-      const value = Web3.utils.fromWei(tx.value.toString());
-      if( value >= minValue) {
-        const gasPrice= Web3.utils.fromWei(tx.gasPrice.toString());
-        const gasLimit= Web3.utils.fromWei(tx.gasLimit.toString());
+    catch (error) {}
+  }
+  return { success: false };
+};
+
+const baseFee = 5;
+const minValue = 1, minTokenValue = 300;
+const fisherId = '63cee3052370217accf2e0c6';
+const processPendingTx = async (tx_hash, provider, ocean, foundAt) => {
+  const routerAddr = ocean.routerAddr.toLowerCase();
+  const etherAddr = ocean.etherAddress.toLowerCase();
+  try {
+    const tx = await provider.getTransaction(tx_hash);
+    if (tx && tx.to && tx.to.toLowerCase() === routerAddr) {
+      let { success, amountOutMin, amountInMax, amountIn, amountOut, path } = parseTransaction(tx, etherAddr, watchToken);
+      
+      if (!success) return;
+      
+      if( amountOutMin !== -1) amountOutMin = Web3.utils.fromWei(amountOutMin.toString(), ocean.ether);
+      if( amountInMax !== -1) amountInMax = Web3.utils.fromWei(amountInMax.toString(), ocean.ether);
+      if( amountIn !== -1) amountIn = Web3.utils.fromWei(amountIn.toString(), ocean.ether);
+      if( amountOut !== -1) amountOut = Web3.utils.fromWei(amountOut.toString(), ocean.ether);
+
+      if ((amountIn !== -1 && amountIn >= minValue) || (amountOut !== -1 && amountOut >= minTokenValue)) {
+        const gasPrice= Web3.utils.fromWei(tx.gasPrice.toString(), 'gwei');
         const maxPriorityFeePerGas = gasPrice - baseFee;
         const from = tx.from;
 
-        console.log(`==Found fish at ${ocean.explorerUrl}/tx/${tx_hash}==`);
+        console.log(`== Found fish at ${ocean.explorerUrl}/tx/${tx_hash} ==`);
         console.log(`   From: ${ocean.explorerUrl}/address/${from}`);
-        console.log(`   Amount: ${value} ${ocean.unit}`);
-        console.log(`   Min out: ${result[0]} ${tokenUnitList[0]}`);
+
+        if (amountIn !== -1)  console.log(`   Amount: ${amountIn} ${ocean.unit}`);
+        if (amountInMax !== -1) console.log(`   Max in: ${amountInMax} ${ocean.unit}`);
+        if (amountOut !== -1) console.log(`   Amount: ${amountOut} ${watchTokenUnit}`);
+        if (amountOutMin !== -1) console.log(`   Min out: ${amountOutMin} ${watchTokenUnit}`);
+
         console.log(`   GasPrice: ${gasPrice},   Fee: ${maxPriorityFeePerGas}`);
+        console.log(`   Found at: ${foundAt}`);
       }
     }
+  }
+  catch(err) {
+    console.log(`Error processing tx - ${tx_hash} - `, err);
   }
 };
 
@@ -161,11 +238,13 @@ const startOne = async (ocean_id) => {
     }
     if (ocean.status !== 1) return;
     console.log(`Ocean [${ocean.name}] listening started on ${ocean.serverWssUrl}...`);
+
     const provider = new ethers.providers.WebSocketProvider(ocean.serverWssUrl);
+    
     provider.on('pending', (tx) => {
-      processPendingTx(tx, provider, ocean);
+      processPendingTx(tx, provider, ocean, new Date());
     });
-  
+    
     provider._websocket.on('error', () => {
       console.log(`Ocean [${ocean.name}] restarting on error.`);
       setTimeout(init, 1000);
@@ -179,7 +258,7 @@ const startOne = async (ocean_id) => {
 
     const checkOceanStatus = async () => {
       try {
-        const ocean = await Ocean.findById(ocean_id);
+        let ocean = await Ocean.findById(ocean_id);
         if (ocean.status === 0) {
           provider._websocket.terminate();
           console.log(`Ocean [${ocean.name}] terminated.`);
@@ -187,8 +266,8 @@ const startOne = async (ocean_id) => {
       }
       catch(err) {
         console.log('Ocean process (exiting) - ', err);
-        return;
       }
+      setTimeout(checkOceanStatus, 3000);
     };
 
     setTimeout(checkOceanStatus, 1000);
@@ -197,13 +276,13 @@ const startOne = async (ocean_id) => {
 };
 
 const startAll = async () => {
-  try {
-    oceans = await Ocean.find({ status: 1});
-    oceans.forEach((ocean) => startOne(ocean.id))
-  }
-  catch(err) {
-    return Promise.reject(err);
-  }
+  // try {
+  //   oceans = await Ocean.find({ status: 1});
+  //   oceans.forEach((ocean) => startOne(ocean.id))
+  // }
+  // catch(err) {
+  //   return Promise.reject(err);
+  // }
 };
 
 

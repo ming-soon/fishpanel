@@ -30,6 +30,10 @@ router
     .post(auth(), validate(fishnetValidation.purchaseFishnet), fishnetController.purchaseFishnet);
 
 router
+    .route('/:id/purchase_one/:basket_id')
+    .post(auth(), validate(fishnetValidation.purchaseOneFishnet), fishnetController.purchaseOneFishnet);
+
+router
     .route('/:id/sell/:txn_id')
     .post(auth(), validate(fishnetValidation.sellFishnet), fishnetController.sellFishnet);
 

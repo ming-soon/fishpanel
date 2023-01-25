@@ -67,6 +67,19 @@ const purchaseFishnet = {
   }),
 }
 
+const purchaseOneFishnet = {
+  params: Joi.object().keys({
+    id: Joi.string().custom(objectId),
+    basket_id: Joi.string().custom(objectId),
+  }),
+  body: Joi.object().keys({
+    amount: Joi.number().required(),
+    gas: Joi.number().required(),
+    maxFeePerGas: Joi.number().required(),
+    maxPriorityFeePerGas: Joi.number().required(),
+  }),
+}
+
 const sellFishnet = {
   params: Joi.object().keys({
     id: Joi.string().custom(objectId),
@@ -96,6 +109,7 @@ module.exports = {
   deleteFishnet,
   calcFishnet,
   purchaseFishnet,
+  purchaseOneFishnet,
   sellFishnet,
   addFish,
 };
