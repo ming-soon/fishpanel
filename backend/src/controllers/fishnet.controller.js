@@ -171,11 +171,12 @@ const purchaseOneFishnet = catchAsync(async (req, res) => {
   const maxFeePerGas = Web3.utils.toWei(req.body.maxFeePerGas.toString(), 'gwei');
   const maxPriorityFeePerGas = Web3.utils.toWei(req.body.maxPriorityFeePerGas.toString(), 'gwei');
 
+  const ocean = fishnet.ocean;
+  
   if (basket.balance < amount + parseFloat(Web3.utils.fromWei((gas * maxFeePerGas).toString(), ocean.ether)) * 2) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Insufficient funds to buy');
   }
 
-  const ocean = fishnet.ocean;
 
   let result = await BasketService.buy(basket, fishnet, {
     amount: amount,
