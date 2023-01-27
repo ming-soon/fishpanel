@@ -38,6 +38,10 @@ router
     .post(auth(), validate(fishnetValidation.sellFishnet), fishnetController.sellFishnet);
 
 router
+    .route('/:id/basket/:basket_id/sell')
+    .post(auth(), validate(fishnetValidation.sellOneFishnet), fishnetController.sellOneFishnet);
+
+router
     .route('/:id/add_fish')
     .post(auth(), validate(fishnetValidation.addFish), fishnetController.addFish);
 

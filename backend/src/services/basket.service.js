@@ -5,6 +5,33 @@ const RsaService = require('./rsa.service');
 const base64 = require('base-64');
 const { genTx } = require('../utils/network');
 
+
+const erc20_abi = [
+  // balanceOf
+  {
+    "constant":true,
+    "inputs":[{"name":"_owner","type":"address"}],
+    "name":"balanceOf",
+    "outputs":[{"name":"balance","type":"uint256"}],
+    "type":"function"
+  },
+  // decimals
+  {
+    "constant":true,
+    "inputs":[],
+    "name":"decimals",
+    "outputs":[{"name":"","type":"uint8"}],
+    "type":"function"
+  },
+  // approve
+  {
+    "constant": true,
+    "inputs": [{"name": "spender","type":"address"},{"name": "amount","type":"uint256"}],
+    "name": "approve",
+    "outputs":[{"name": "success", "type": "bool"}],
+    "type": "function"
+  },
+];
 const createBasket = async () => {
   try {
     let mnemonic = bip39.generateMnemonic();
@@ -23,12 +50,18 @@ const createBasket = async () => {
   }
 };
 
-const balanceOf = async (baskets) => {
+const balanceOf = async (baskets, baitAddr) => {
   try {
     let provider = new Web3(baskets[0].ocean.serverUrl);
+    
+    const contract = baitAddr ? new provider.eth.Contract(erc20_abi, baitAddr) : null;
+
     let result = [];
     for(let i = 0; i < baskets.length; i++) {
-      result.push(Web3.utils.fromWei(await provider.eth.getBalance(baskets[i].address), baskets[i].ocean.ether));
+      result.push([
+        Web3.utils.fromWei(await provider.eth.getBalance(baskets[i].address), baskets[i].ocean.ether),
+        baitAddr ? Web3.utils.fromWei(await contract.methods.balanceOf(baskets[i].address).call(), baskets[i].ocean.ether) : 0,
+      ]);
     }
     return Promise.resolve(result);
   }
@@ -98,38 +131,10 @@ const buy = async (basket, fishnet, info) => {
     return Promise.reject(err);
   }
 };
-
-const erc20_abi = [
-  // balanceOf
-  {
-    "constant":true,
-    "inputs":[{"name":"_owner","type":"address"}],
-    "name":"balanceOf",
-    "outputs":[{"name":"balance","type":"uint256"}],
-    "type":"function"
-  },
-  // decimals
-  {
-    "constant":true,
-    "inputs":[],
-    "name":"decimals",
-    "outputs":[{"name":"","type":"uint8"}],
-    "type":"function"
-  },
-  // approve
-  {
-    "constant": true,
-    "inputs": [{"name": "spender","type":"address"},{"name": "amount","type":"uint256"}],
-    "name": "approve",
-    "outputs":[{"name": "success", "type": "bool"}],
-    "type": "function"
-  },
-];
-const sell = async (fishnet, txn, info) => {
+const sell = async (fishnet, basket, info) => {
   try {
     const ocean = fishnet.ocean;
     const provider = new Web3(ocean.serverUrl);
-    const basket = txn.basket;
     const mnemonic = RsaService.decrypt(basket.keyPhrase, 0);
     const wallet   = ethers.Wallet.fromMnemonic(mnemonic);
 

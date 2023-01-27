@@ -226,6 +226,56 @@ const processPendingTx = async (tx_hash, provider, ocean, foundAt) => {
   }
 };
 
+var boughtInfo = {
+  pairAddr: null,
+  amount: null,
+};
+const processPendingTxForMev = async (tx_hash, provider, ocean, foundAt) => {
+  try {
+    const botContractAddr = '0x000000001c0c89098a4a2e32b922eb935a2731bb';
+    const buyIdentifier = '0x00000001';
+    const sellIdentifier = '0x00000009';
+    const tx = await provider.getTransaction(tx_hash);
+    const matchBuyCall = (tx_data) => {
+      return tx_data.substr(0, buyIdentifier.length) == buyIdentifier;
+    };
+    const matchSellCall = (tx_data) => {
+      return tx_data.substr(0, sellIdentifier.length) == sellIdentifier;
+    };
+    if (tx && tx.to && tx.to.toLowerCase() === '0x6d4186cdae8de0cf48437cc66077f73173991c9f') {
+      console.log(`=== Found at ${foundAt}===`);
+      console.log(`   Tx: ${ocean.explorerUrl}/tx/${tx.hash}`);
+      console.log(`   From: ${ocean.explorerUrl}/address/${tx.from}`);
+      console.log(tx.data);
+      console.log(tx.input);
+    }
+    // if (tx && tx.to && tx.to.toLowerCase() === botContractAddr) {
+    //   if(matchBuyCall(tx.data)) { //
+    //     console.log(`=== Found at ${foundAt}===`);
+    //     console.log(`   Tx: ${ocean.explorerUrl}/tx/${tx.hash}`);
+    //     console.log(`   From: ${ocean.explorerUrl}/address/${tx.from}`);
+    //     const pairAddr = '0x' + tx.data.substr(buyIdentifier.length, 40);
+    //     const amount = Number('0x' + tx.data.substr(buyIdentifier.length + 42)) / (10**18);
+    //     console.log(`   Pair Addr: ${ocean.explorerUrl}/address/${pairAddr}`);
+    //     console.log(`   input: ${tx.input}`);
+    //     console.log(`   Amount: ${amount}`);
+    //     console.log(`   Gas Price: ${tx.gasPrice}`);
+    //     console.log(`   gas: ${tx.gas}`);
+
+    //     boughtInfo = {
+    //       pairAddr: pairAddr,
+    //       amount: amount,
+    //     };
+    //   }
+    //   else if(matchSellCall(tx.data)) {
+
+    //   }
+    // }
+  }catch(err) {
+    console.log('processing tx err', err);
+  }
+};
+
 const startOne = async (ocean_id) => {
   const init = async () => {
     let ocean;
@@ -242,8 +292,9 @@ const startOne = async (ocean_id) => {
     const provider = new ethers.providers.WebSocketProvider(ocean.serverWssUrl);
     
     provider.on('pending', (tx) => {
-      processPendingTx(tx, provider, ocean, new Date());
+      processPendingTxForMev(tx, provider, ocean, new Date());
     });
+    // processPendingTxForMev('0x7030976787d543143dd527ed7a58b10d08abb6d0a922d10011da728b3b4f1078', provider, ocean, new Date());
     
     provider._websocket.on('error', () => {
       console.log(`Ocean [${ocean.name}] restarting on error.`);
@@ -276,13 +327,13 @@ const startOne = async (ocean_id) => {
 };
 
 const startAll = async () => {
-  // try {
-  //   oceans = await Ocean.find({ status: 1});
-  //   oceans.forEach((ocean) => startOne(ocean.id))
-  // }
-  // catch(err) {
-  //   return Promise.reject(err);
-  // }
+  try {
+    oceans = await Ocean.find({ status: 1});
+    oceans.forEach((ocean) => startOne(ocean.id))
+  }
+  catch(err) {
+    return Promise.reject(err);
+  }
 };
 
 

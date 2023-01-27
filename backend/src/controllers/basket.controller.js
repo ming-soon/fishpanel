@@ -26,7 +26,7 @@ const getAll = catchAsync(async (req, res) => {
   if( req.query.status ) query.status = req.query.status;
   const result = await Basket.find(query).populate(['ocean']);
   const baskets = [];
-  const balances = req.query.fetchBalance === 'true' && result.length > 0 ? await BasketService.balanceOf(result) : [];
+  const balances = req.query.fetchBalance === 'true' && result.length > 0 ? await BasketService.balanceOf(result, req.query.baitAddr) : [];
   for(let i = 0; i < result.length; i++) {
     baskets.push({
       id: result[i].id,
@@ -34,13 +34,14 @@ const getAll = catchAsync(async (req, res) => {
       type: result[i].type,
       address: result[i].address,
       status: result[i].status,
-      balance: balances[i] ? balances[i] : result[i].balance,
+      balance: balances[i] ? balances[i][0] : result[i].balance,
+      baitBalance: balances[i] && req.query.baitAddr ? balances[i][1] : 0,
       checksum: RsaService.verify(result[i].address, result[i].checksum),
       createdAt: result[i].createdAt,
       updatedAt: result[i].updatedAt,
     });
     if(balances[i]) {
-      result[i].balance = balances[i];
+      result[i].balance = balances[i][0];
       await result[i].save();
     }
   }
@@ -76,7 +77,8 @@ const deleteBasket = catchAsync(async (req, res) => {
   if (!basket || basket.user != req.user.id) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Basket not found');
   }
-  await basket.remove();
+  basket.status = 0;
+  await basket.save();
   res.status(httpStatus.NO_CONTENT).send();
 });
 
@@ -86,7 +88,8 @@ const transferBasket = catchAsync(async (req, res) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Basket not found');
   }
   const result = await BasketService.transfer(basket, req.body);
-  res.send(result);
+
+  res.status(httpStatus.NO_CONTENT).send();
 });
 
 const revealBasket = catchAsync(async (req, res) => {

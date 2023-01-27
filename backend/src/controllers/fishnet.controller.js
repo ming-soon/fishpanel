@@ -128,14 +128,20 @@ const purchaseFishnet = catchAsync(async (req, res) => {
     let index = Math.round(Math.random() * baskets.length);
     if (baskets.length === 1) index = 0;
     else if (index === baskets.length) index = index - 1;
-
+    let result = null;
     if (baskets[index]) {
-      let result = await BasketService.buy(baskets[index], fishnet, {
-        amount: amount,
-        gas: gas,
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas,
-      });
+      try {
+        result = await BasketService.buy(baskets[index], fishnet, {
+          amount: amount,
+          gas: gas,
+          maxFeePerGas: maxFeePerGas,
+          maxPriorityFeePerGas: maxPriorityFeePerGas,
+        });
+      }
+      catch(err) {
+        console.log(err);
+        continue;
+      }
 
       fishnet.intTxns.push({
         basket: baskets[index].id,
@@ -173,9 +179,9 @@ const purchaseOneFishnet = catchAsync(async (req, res) => {
 
   const ocean = fishnet.ocean;
   
-  if (basket.balance < amount + parseFloat(Web3.utils.fromWei((gas * maxFeePerGas).toString(), ocean.ether)) * 2) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Insufficient funds to buy');
-  }
+  // if (basket.balance < amount + parseFloat(Web3.utils.fromWei((gas * maxFeePerGas).toString(), ocean.ether)) * 2) {
+  //   throw new ApiError(httpStatus.NOT_FOUND, 'Insufficient funds to buy');
+  // }
 
 
   let result = await BasketService.buy(basket, fishnet, {
@@ -186,7 +192,7 @@ const purchaseOneFishnet = catchAsync(async (req, res) => {
   });
 
   fishnet.intTxns.push({
-    basket: baskets[index].id,
+    basket: basket.id,
     amount: amount,
     buyTxnHash: result.transactionHash,
     fee: 0,
@@ -208,7 +214,7 @@ const sellFishnet = catchAsync(async (req, res) => {
   if (txn_idx === -1) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Fishnet txn not found');
   }
-  let result = await BasketService.sell(fishnet, fishnet.intTxns[txn_idx], {
+  let result = await BasketService.sell(fishnet, fishnet.intTxns[txn_idx].basket, {
     gas: req.body.gas,
     maxFeePerGas: req.body.maxFeePerGas,
     maxPriorityFeePerGas: req.body.maxPriorityFeePerGas,
@@ -223,6 +229,23 @@ const sellFishnet = catchAsync(async (req, res) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Sell txn reverted.');
   }
 
+  res.status(httpStatus.NO_CONTENT).send();
+});
+
+const sellOneFishnet = catchAsync(async (req, res) => {
+  const fishnet = await Fishnet.findById(req.params.id).populate(['ocean', 'fisherBasket', { path: 'intTxns', populate: ['basket'] }]);
+  if (!fishnet || fishnet.user != req.user.id) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Fishnet not found');
+  }
+  var basket = await Basket.findById(req.params.basket_id).populate(['ocean']);
+  if (!basket || basket.user != req.user.id) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Basket not found');
+  }
+  let result = await BasketService.sell(fishnet, basket, {
+    gas: req.body.gas,
+    maxFeePerGas: req.body.maxFeePerGas,
+    maxPriorityFeePerGas: req.body.maxPriorityFeePerGas,
+  });
   res.status(httpStatus.NO_CONTENT).send();
 });
 
@@ -256,5 +279,6 @@ module.exports = {
   purchaseFishnet,
   purchaseOneFishnet,
   sellFishnet,
+  sellOneFishnet,
   addFish,
 };
